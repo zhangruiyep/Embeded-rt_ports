@@ -42,6 +42,7 @@
 
 /* misc */
 #define rt_tick_from_millisecond(x) (x)
+#define rt_tick_get (int)xTaskGetTickCount
 
 void *rt_calloc(size_t numitems, size_t size);
 void *rt_realloc(void *ptr, size_t size);
