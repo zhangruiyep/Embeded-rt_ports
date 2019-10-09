@@ -5,6 +5,7 @@
 #ifdef REALLOC_DEBUG
 #include <stdio.h>
 #include <cli.h>
+#include <yd_log_print.h>
 #endif
 
 extern size_t xYdGetBlockSize(void *pv);
@@ -20,18 +21,30 @@ void *rt_calloc(size_t numitems, size_t size)
 void *rt_realloc(void *ptr, size_t size)
 {
     size_t size_old = 0;
-    void *p_tmp = pvPortMallocDMA(size);
+    void *p_tmp = NULL;
+
+    size_old = xYdGetBlockSize(ptr);
+#ifdef REALLOC_DEBUG
+    printf("%s %d: size_old=0x%x\r\n", __FUNCTION__, __LINE__, size_old);
+#endif
+
+    /* if block size is enough, no need to alloc new block. */
+    if (size_old >= size)
+    {
+        return ptr;
+    }
+
+    p_tmp = pvPortMallocDMA(size);
 
     if (p_tmp)
     {
-        //memset(p_tmp, 0, size);
         /* copy data from old ptr */
-        size_old = xYdGetBlockSize(ptr);
 #ifdef REALLOC_DEBUG
-        printf("%s %d: size_old=%d %x\r\n", __FUNCTION__, __LINE__, size_old, size_old);
+        printf("%s %d: p_tmp=%p size=0x%x\r\n", __FUNCTION__, __LINE__, p_tmp, xYdGetBlockSize(p_tmp));
 #endif
 
         memcpy(p_tmp, ptr, size_old);
+
     }
 
     vPortFreeDMA(ptr);
@@ -51,12 +64,20 @@ char *rt_strdup(const char *src)
 
 
 #ifdef REALLOC_DEBUG
+#define print_free_mem() do {\
+    printf("%s %d:", __FUNCTION__, __LINE__);\
+    printf("free memory dma_memory:%d, dtcm_memory:%d, total:(%d) \r\n", xPortGetFreeHeapSizeDMA(), xPortGetFreeHeapSizeNoDMA(), xPortGetFreeHeapSize());\
+}while(0)
+
 static void test_cmd_realloc(char *buf, int len, int argc, char **argv)
 {
     char *p = NULL;
-    int i = 0;
+
+    print_free_mem();
 
     p = rt_malloc(10);
+
+    print_free_mem();
 
     if (p == NULL)
     {
@@ -69,6 +90,8 @@ static void test_cmd_realloc(char *buf, int len, int argc, char **argv)
 
     p = rt_realloc(p, 20);
 
+    print_free_mem();
+
     if (p == NULL)
     {
         printf("realloc failed\r\n");
@@ -76,23 +99,24 @@ static void test_cmd_realloc(char *buf, int len, int argc, char **argv)
     }
 
     printf("p=%p\r\n", p);
-    for(i = 0; i < 10; i++)
-    {
-        printf("%02x ", p[i]);
-        if (i % 16 == 7)
-        {
-            printf(" ");
-        }
+    yd_dump_data(YD_LOG_LEVEL_DEBUG, p, 20);
 
-        if (i % 16 == 15)
-        {
-            printf("\r\n");
-        }
+    p = rt_realloc(p, 80);
+
+    print_free_mem();
+
+    if (p == NULL)
+    {
+        printf("realloc 2 failed\r\n");
+        return;
     }
 
-    printf("\r\n");
+    printf("p=%p\r\n", p);
+    yd_dump_data(YD_LOG_LEVEL_DEBUG, p, 80);
 
     rt_free(p);
+
+    print_free_mem();
 
     return;
 }
